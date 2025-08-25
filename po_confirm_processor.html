@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PO Confirmation Processor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .step {
+            margin-bottom: 40px;
+            opacity: 1;
+            transition: all 0.3s ease;
+        }
+        
+        .step.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        .step-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #3498db;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        
+        .step-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .file-upload {
+            border: 3px dashed #bdc3c7;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .file-upload:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+        
+        .file-upload.success {
+            border-color: #27ae60;
+            background: #d5f4e6;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            color: #bdc3c7;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            font-size: 1.1em;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+        
+        .file-info {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .process-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+            width: 100%;
+        }
+        
+        .process-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(39, 174, 96, 0.4);
+        }
+        
+        .process-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .alert {
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert.success {
+            background: #d5f4e6;
+            color: #27ae60;
+            border: 1px solid #27ae60;
+        }
+        
+        .alert.error {
+            background: #fadbd8;
+            color: #e74c3c;
+            border: 1px solid #e74c3c;
+        }
+        
+        .alert.warning {
+            background: #fef9e7;
+            color: #f39c12;
+            border: 1px solid #f39c12;
+        }
+        
+        .processing {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .results h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(142, 68, 173, 0.3);
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(142, 68, 173, 0.4);
+        }
+        
+        .missing-pos {
+            background: #fadbd8;
+            border: 2px solid #e74c3c;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .missing-pos h4 {
+            color: #e74c3c;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .po-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        
+        .reset-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 15px;
+        }
+        
+        .reset-btn:hover {
+            background: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PO Confirmation Processor</h1>
+            <p>Process and merge your Vendor Central PO confirmation files</p>
+        </div>
+        
+        <div class="main-content">
+            <div id="alerts"></div>
+            
+            <div class="step" id="step1">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Upload Vendor Central Template</div>
+                </div>
+                <div class="file-upload" onclick="document.getElementById('file1').click()">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">Click to upload your Vendor Central PO Confirm template (.xls)</div>
+                    <div class="upload-text" style="font-size: 0.9em; color: #95a5a6;">This is the file downloaded directly from Vendor Central</div>
+                    <input type="file" id="file1" class="file-input" accept=".xls,.xlsx" onchange="handleFile1(this)">
+                    <div class="file-info" id="file1-info"></div>
+                </div>
+            </div>
+            
+            <div class="step disabled" id="step2">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Upload PO Data File</div>
+                </div>
+                <div class="file-upload" onclick="document.getElementById('file2').click()">
+                    <div class="upload-icon">📊</div>
+                    <div class="upload-text">Click to upload your PO Upload data file (.xlsx)</div>
+                    <div class="upload-text" style="font-size: 0.9em; color: #95a5a6;">This contains the quantities and status information</div>
+                    <input type="file" id="file2" class="file-input" accept=".xlsx" onchange="handleFile2(this)">
+                    <div class="file-info" id="file2-info"></div>
+                </div>
+            </div>
+            
+            <div class="step disabled" id="step3">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Process Files</div>
+                </div>
+                <button class="process-btn" id="processBtn" onclick="processFiles()" disabled>
+                    Process PO Confirmation Data
+                </button>
+            </div>
+            
+            <div class="processing" id="processing">
+                <div class="spinner"></div>
+                <div>Processing your files...</div>
+            </div>
+            
+            <div class="results" id="results">
+                <h3>Processing Complete! 🎉</h3>
+                <div class="stats" id="stats"></div>
+                <button class="download-btn" onclick="downloadFile()">Download Processed File</button>
+                <button class="reset-btn" onclick="resetTool()">Process Another File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let file1Data = null;
+        let file2Data = null;
+        let processedData = null;
+        let filename = null;
+
+        function showAlert(message, type = 'info') {
+            const alertsContainer = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.innerHTML = message;
+            alert.style.display = 'block';
+            alertsContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 10000);
+        }
+
+        function handleFile1(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            filename = file.name.replace('.xls', '_processed.xlsx');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const workbook = XLSX.read(e.target.result, {type: 'binary'});
+                    file1Data = workbook;
+                    
+                    document.querySelector('#step1 .file-upload').classList.add('success');
+                    document.getElementById('file1-info').innerHTML = `
+                        <strong>✓ File loaded:</strong> ${file.name}<br>
+                        <strong>Sheets:</strong> ${workbook.SheetNames.join(', ')}
+                    `;
+                    document.getElementById('file1-info').style.display = 'block';
+                    
+                    document.getElementById('step2').classList.remove('disabled');
+                    showAlert('Vendor Central template loaded successfully!', 'success');
+                    
+                } catch (error) {
+                    showAlert(`Error reading file 1: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsBinaryString(file);
+        }
+
+        function handleFile2(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const workbook = XLSX.read(e.target.result, {type: 'binary'});
+                    file2Data = workbook;
+                    
+                    document.querySelector('#step2 .file-upload').classList.add('success');
+                    document.getElementById('file2-info').innerHTML = `
+                        <strong>✓ File loaded:</strong> ${file.name}<br>
+                        <strong>Sheets:</strong> ${workbook.SheetNames.join(', ')}
+                    `;
+                    document.getElementById('file2-info').style.display = 'block';
+                    
+                    document.getElementById('step3').classList.remove('disabled');
+                    document.getElementById('processBtn').disabled = false;
+                    showAlert('PO data file loaded successfully!', 'success');
+                    
+                } catch (error) {
+                    showAlert(`Error reading file 2: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsBinaryString(file);
+        }
+
+        function processFiles() {
+            document.getElementById('processing').style.display = 'block';
+            document.getElementById('processBtn').disabled = true;
+            
+            setTimeout(() => {
+                try {
+                    // Get data from both files
+                    const lineItemsSheet = file1Data.Sheets["Line Items"];
+                    const file1LineItems = XLSX.utils.sheet_to_json(lineItemsSheet, { header: 1 });
+                    
+                    const file2Sheet = file2Data.Sheets["Sheet1"];
+                    const file2Data_array = XLSX.utils.sheet_to_json(file2Sheet, { header: 1 });
+                    
+                    // Create lookup map from File 2 using PO + ASIN as key
+                    const file2Lookup = new Map();
+                    const file2POs = new Set();
+                    
+                    for (let i = 1; i < file2Data_array.length; i++) {
+                        const po = file2Data_array[i][0];
+                        const asin = file2Data_array[i][3];
+                        const totalQty = file2Data_array[i][42]; // Column AQ - Total Qty to Fulfill
+                        const finalCancelReason = file2Data_array[i][40]; // Column AO - Final Cancel Reason
+                        
+                        if (po && asin !== undefined) {
+                            const key = `${po}|${asin}`;
+                            file2Lookup.set(key, {
+                                totalQty: totalQty || 0,
+                                finalCancelReason: finalCancelReason || ''
+                            });
+                            file2POs.add(po);
+                        }
+                    }
+                    
+                    // Check for missing POs (File 2 POs not in File 1)
+                    const file1POs = new Set();
+                    for (let i = 3; i < file1LineItems.length; i++) {
+                        const po = file1LineItems[i][0];
+                        if (po) file1POs.add(po);
+                    }
+                    
+                    const missingPOs = Array.from(file2POs).filter(po => !file1POs.has(po));
+                    
+                    if (missingPOs.length > 0) {
+                        document.getElementById('processing').style.display = 'none';
+                        document.getElementById('processBtn').disabled = false;
+                        
+                        showAlert(`
+                            <div class="missing-pos">
+                                <h4>🛑 PROCESSING STOPPED - Missing PO Data</h4>
+                                <p><strong>${missingPOs.length} POs</strong> from your PO Upload are missing from the Vendor Central template:</p>
+                                <div class="po-list">${missingPOs.join('<br>')}</div>
+                                <p style="margin-top: 15px;"><strong>Please resolve these missing POs in your Vendor Central template and re-upload both files.</strong></p>
+                            </div>
+                        `, 'error');
+                        return;
+                    }
+                    
+                    // Process and filter the data
+                    const processedRows = [];
+                    let acceptedCount = 0;
+                    let cancelledCount = 0;
+                    let unmatchedCount = 0;
+                    const cancelReasons = new Set();
+                    
+                    // Copy header rows (first 3 rows)
+                    for (let i = 0; i < 3; i++) {
+                        processedRows.push(file1LineItems[i]);
+                    }
+                    
+                    // Process data rows
+                    for (let i = 3; i < file1LineItems.length; i++) {
+                        const row = [...file1LineItems[i]]; // Copy the row
+                        const po = row[0];
+                        const asin = row[3];
+                        
+                        if (po && file2POs.has(po)) {
+                            const key = `${po}|${asin}`;
+                            const matchData = file2Lookup.get(key);
+                            
+                            if (matchData) {
+                                // Update Quantity Confirmed (Column L, index 11)
+                                row[11] = matchData.totalQty;
+                                
+                                // Update Availability Status (Column S, index 18)
+                                if (matchData.totalQty > 0) {
+                                    row[18] = "AC - Accepted: In stock";
+                                    acceptedCount++;
+                                } else {
+                                    row[18] = "OS - Cancelled: Out of stock";
+                                    cancelledCount++;
+                                }
+                                
+                                // Track cancel reasons for reporting
+                                if (matchData.finalCancelReason) {
+                                    cancelReasons.add(matchData.finalCancelReason);
+                                }
+                                
+                                processedRows.push(row);
+                            } else {
+                                unmatchedCount++;
+                            }
+                        }
+                    }
+                    
+                    // Create the processed workbook
+                    const newWorkbook = XLSX.utils.book_new();
+                    
+                    // Copy all sheets from original file
+                    file1Data.SheetNames.forEach(sheetName => {
+                        if (sheetName === "Line Items") {
+                            // Use processed data for Line Items
+                            const newSheet = XLSX.utils.aoa_to_sheet(processedRows);
+                            XLSX.utils.book_append_sheet(newWorkbook, newSheet, sheetName);
+                        } else {
+                            // Copy other sheets as-is
+                            const originalSheet = file1Data.Sheets[sheetName];
+                            XLSX.utils.book_append_sheet(newWorkbook, originalSheet, sheetName);
+                        }
+                    });
+                    
+                    processedData = newWorkbook;
+                    
+                    // Show results
+                    document.getElementById('processing').style.display = 'none';
+                    document.getElementById('results').style.display = 'block';
+                    
+                    const statsHtml = `
+                        <div class="stat-card">
+                            <div class="stat-number">${processedRows.length - 3}</div>
+                            <div class="stat-label">Total Rows Processed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${acceptedCount}</div>
+                            <div class="stat-label">Accepted Items</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${cancelledCount}</div>
+                            <div class="stat-label">Cancelled Items</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${file2POs.size}</div>
+                            <div class="stat-label">Unique POs</div>
+                        </div>
+                    `;
+                    document.getElementById('stats').innerHTML = statsHtml;
+                    
+                    // Show cancel reasons if any
+                    if (cancelReasons.size > 0) {
+                        showAlert(`
+                            <strong>Cancel Reasons Found:</strong><br>
+                            ${Array.from(cancelReasons).join('<br>')}
+                        `, 'warning');
+                    }
+                    
+                    if (unmatchedCount > 0) {
+                        showAlert(`${unmatchedCount} rows from File 1 could not be matched with File 2 data (PO+ASIN combinations not found)`, 'warning');
+                    }
+                    
+                    showAlert('Processing completed successfully!', 'success');
+                    
+                } catch (error) {
+                    document.getElementById('processing').style.display = 'none';
+                    document.getElementById('processBtn').disabled = false;
+                    showAlert(`Error processing files: ${error.message}`, 'error');
+                    console.error('Processing error:', error);
+                }
+            }, 1000);
+        }
+
+        function downloadFile() {
+            if (!processedData) {
+                showAlert('No processed data available to download', 'error');
+                return;
+            }
+            
+            try {
+                const wbout = XLSX.write(processedData, {
+                    bookType: 'xlsx', 
+                    type: 'array'
+                });
+                
+                const blob = new Blob([wbout], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+                
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename || 'processed_po_confirmation.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showAlert('File downloaded successfully!', 'success');
+                
+            } catch (error) {
+                showAlert(`Download error: ${error.message}`, 'error');
+                console.error('Download error:', error);
+            }
+        }
+
+        function resetTool() {
+            file1Data = null;
+            file2Data = null;
+            processedData = null;
+            filename = null;
+            
+            document.getElementById('file1').value = '';
+            document.getElementById('file2').value = '';
+            document.getElementById('file1-info').style.display = 'none';
+            document.getElementById('file2-info').style.display = 'none';
+            document.querySelector('#step1 .file-upload').classList.remove('success');
+            document.querySelector('#step2 .file-upload').classList.remove('success');
+            document.getElementById('step2').classList.add('disabled');
+            document.getElementById('step3').classList.add('disabled');
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('alerts').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modified PO Doc Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background-color: #e8f4f8;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .file-inputs {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .file-input-group {
+            margin-bottom: 15px;
+        }
+        .file-input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #495057;
+        }
+        .file-input-group input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            background-color: white;
+        }
+        .button-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: none;
+        }
+        .stats h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .stats ul {
+            list-style: none;
+            padding: 0;
+        }
+        .stats li {
+            padding: 5px 0;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Modified PO Doc Generator</h1>
+        
+        <div class="info-box">
+            <h3>About this tool</h3>
+            <p>This tool combines data from the PO Doc and Carton Level Data Doc to create a Modified PO Doc CSV file with calculated fields for cartons, volume, and weight.</p>
+        </div>
+        
+        <div class="file-inputs">
+            <div class="file-input-group">
+                <label for="poDoc">1. Select PO Doc Excel file (.xlsx):</label>
+                <input type="file" id="poDoc" accept=".xlsx,.xls" />
+            </div>
+            <div class="file-input-group">
+                <label for="cartonDoc">2. Select Carton Level Data Doc CSV file (.csv):</label>
+                <input type="file" id="cartonDoc" accept=".csv" />
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <button id="generateBtn" onclick="generateModifiedPO()">Generate Modified PO Doc</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+        <div id="stats" class="stats"></div>
+    </div>
+
+    <script>
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        async function generateModifiedPO() {
+            const button = document.getElementById('generateBtn');
+            const statusDiv = document.getElementById('status');
+            const statsDiv = document.getElementById('stats');
+            const poDocInput = document.getElementById('poDoc');
+            const cartonDocInput = document.getElementById('cartonDoc');
+            
+            // Reset status
+            statusDiv.style.display = 'none';
+            statsDiv.style.display = 'none';
+            
+            // Check if files are selected
+            if (!poDocInput.files[0] || !cartonDocInput.files[0]) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '<strong>Error:</strong> Please select both files before generating.';
+                statusDiv.style.display = 'block';
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = 'Processing...';
+            
+            try {
+                // Read PO Doc Excel file
+                const poDocData = await readFileAsArrayBuffer(poDocInput.files[0]);
+                const poWorkbook = XLSX.read(poDocData);
+                const poSheet = poWorkbook.Sheets[poWorkbook.SheetNames[0]];
+                const poRows = XLSX.utils.sheet_to_json(poSheet, { defval: '' });
+                
+                // Read Carton Level Data CSV
+                const cartonData = await readFileAsText(cartonDocInput.files[0]);
+                const cartonParsed = Papa.parse(cartonData, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true
+                });
+                
+                // Create lookup map for carton data by ASIN
+                // For ASINs with multiple entries, use the most common non-zero values
+                const cartonMap = {};
+                const asinEntries = {};
+                const configurationMap = {};
+                
+                // First, collect all entries for each ASIN and configuration
+                cartonParsed.data.forEach(row => {
+                    const asin = row['Amazon Item Number (ASIN)'];
+                    const config = row['Configuration'];
+                    
+                    // Collect by ASIN
+                    if (asin && typeof asin === 'string' && asin.trim() !== '') {
+                        const cleanAsin = asin.trim();
+                        if (!asinEntries[cleanAsin]) {
+                            asinEntries[cleanAsin] = [];
+                        }
+                        asinEntries[cleanAsin].push(row);
+                    }
+                    
+                    // Collect by Configuration for fallback
+                    if (config && typeof config === 'string' && config.trim() !== '') {
+                        const cleanConfig = config.trim();
+                        if (!configurationMap[cleanConfig]) {
+                            configurationMap[cleanConfig] = {
+                                volumes: {},
+                                weights: {}
+                            };
+                        }
+                        
+                        const volume = row['Carton Volume (CBF)'];
+                        const weight = row['Carton Weight (lbs)'];
+                        
+                        if (volume && volume > 0) {
+                            configurationMap[cleanConfig].volumes[volume] = 
+                                (configurationMap[cleanConfig].volumes[volume] || 0) + 1;
+                        }
+                        if (weight && weight > 0) {
+                            configurationMap[cleanConfig].weights[weight] = 
+                                (configurationMap[cleanConfig].weights[weight] || 0) + 1;
+                        }
+                    }
+                });
+                
+                // Helper function to get most common value
+                const getMostCommon = (counts) => {
+                    let maxCount = 0;
+                    let mostCommon = 0;
+                    Object.entries(counts).forEach(([value, count]) => {
+                        if (count > maxCount) {
+                            maxCount = count;
+                            mostCommon = parseFloat(value);
+                        }
+                    });
+                    return mostCommon;
+                };
+                
+                // Process each ASIN to determine the best values
+                Object.keys(asinEntries).forEach(asin => {
+                    const entries = asinEntries[asin];
+                    
+                    if (entries.length === 1) {
+                        // Single entry - use it directly
+                        cartonMap[asin] = entries[0];
+                    } else {
+                        // Multiple entries - find most common non-zero values
+                        const valueCounts = {
+                            units: {},
+                            volume: {},
+                            weight: {}
+                        };
+                        
+                        let configuration = null;
+                        
+                        // Count occurrences of each non-zero value
+                        entries.forEach(entry => {
+                            const units = entry['Units per Carton'];
+                            const volume = entry['Carton Volume (CBF)'];
+                            const weight = entry['Carton Weight (lbs)'];
+                            
+                            if (!configuration && entry['Configuration']) {
+                                configuration = entry['Configuration'];
+                            }
+                            
+                            if (units && units > 0) {
+                                valueCounts.units[units] = (valueCounts.units[units] || 0) + 1;
+                            }
+                            if (volume && volume > 0) {
+                                valueCounts.volume[volume] = (valueCounts.volume[volume] || 0) + 1;
+                            }
+                            if (weight && weight > 0) {
+                                valueCounts.weight[weight] = (valueCounts.weight[weight] || 0) + 1;
+                            }
+                        });
+                        
+                        // Create consolidated entry with most common values
+                        cartonMap[asin] = {
+                            'Units per Carton': getMostCommon(valueCounts.units),
+                            'Carton Volume (CBF)': getMostCommon(valueCounts.volume),
+                            'Carton Weight (lbs)': getMostCommon(valueCounts.weight),
+                            'Amazon Item Number (ASIN)': asin,
+                            'Configuration': configuration
+                        };
+                    }
+                    
+                    // If volume or weight are still missing, try to get from configuration
+                    const entry = cartonMap[asin];
+                    const config = entry['Configuration'];
+                    
+                    if (config && configurationMap[config]) {
+                        if (!entry['Carton Volume (CBF)'] || entry['Carton Volume (CBF)'] === 0) {
+                            entry['Carton Volume (CBF)'] = getMostCommon(configurationMap[config].volumes);
+                        }
+                        if (!entry['Carton Weight (lbs)'] || entry['Carton Weight (lbs)'] === 0) {
+                            entry['Carton Weight (lbs)'] = getMostCommon(configurationMap[config].weights);
+                        }
+                    }
+                });
+                
+                // Process and merge data
+                const modifiedRows = [];
+                let matchCount = 0;
+                let noMatchCount = 0;
+                
+                poRows.forEach((poRow) => {
+                    const asin = (poRow['ASIN'] || '').toString().trim();
+                    const cartonInfo = cartonMap[asin] || {};
+                    
+                    if (cartonMap[asin]) {
+                        matchCount++;
+                    } else {
+                        noMatchCount++;
+                    }
+                    
+                    // Calculate derived fields
+                    let totalQty = parseFloat(poRow['Total Qty to Fulfill']) || 0;
+                    let ctnQty = parseFloat(cartonInfo['Units per Carton']) || 0;
+                    let cuft = parseFloat(cartonInfo['Carton Volume (CBF)']) || 0;
+                    let lbs = parseFloat(cartonInfo['Carton Weight (lbs)']) || 0;
+                    
+                    // If still no carton data, try SKU pattern matching as last resort
+                    // This handles cases where ASINs don't exist in carton data (like FB- prefix items)
+                    if ((!ctnQty || !cuft || !lbs) && poRow['SKU']) {
+                        const sku = poRow['SKU'].toUpperCase();
+                        
+                        // Pattern matching for Trek 40oz items
+                        if (sku.includes('TRK') && sku.includes('40')) {
+                            // Use most common Trek 40oz values as defaults
+                            if (!ctnQty) ctnQty = 6; // Common pack size
+                            if (!cuft) cuft = 2.456; // Most common Trek 40oz volume
+                            if (!lbs) lbs = 18.497; // Most common Trek 40oz weight
+                        }
+                        // Summit 32oz pattern
+                        else if (sku.includes('SUMMIT') && sku.includes('32')) {
+                            if (!ctnQty) ctnQty = 24;
+                            if (!cuft) cuft = 1.293;
+                            if (!lbs) lbs = 15.873;
+                        }
+                        // Scout 12oz pattern
+                        else if (sku.includes('SCOUT') && sku.includes('12')) {
+                            if (!ctnQty) ctnQty = 24;
+                            if (!cuft) cuft = 1.204;
+                            if (!lbs) lbs = 12.698;
+                        }
+                        // Add more patterns as needed
+                    }
+                    
+                    const cartons = ctnQty > 0 ? Math.ceil(totalQty / ctnQty) : 0;
+                    
+                    modifiedRows.push({
+                        'Order/PO Number': poRow['Order/PO Number'] || '',
+                        'SKU': poRow['SKU'] || '',
+                        'Model Number': poRow['Model Number'] || '',
+                        'ASIN': asin,
+                        'po-asin': `${poRow['Order/PO Number'] || ''}${asin}`,
+                        'Total Qty to Fulfill': totalQty,
+                        'ctn qty': ctnQty,
+                        'Cartons': cartons,
+                        'cuft': cuft,
+                        'VOL': Math.round(cartons * cuft * 1000) / 1000,
+                        'lbs': lbs,
+                        'WT': Math.round(cartons * lbs * 1000) / 1000,
+                        'UPC': poRow['UPC'] || '',
+                        'Fulfillment Center': poRow['Fulfillment Center'] || '',
+                        'PO Warehouse Final': poRow['PO Warehouse Final'] || '',
+                        'PO Item Eligible': poRow['PO Item Eligible']
+                    });
+                });
+                
+                // Generate CSV
+                const csvContent = Papa.unparse(modifiedRows, {
+                    header: true,
+                    quotes: true
+                });
+                
+                // Create download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'Modified_PO_Doc.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                // Show success message and stats
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '<strong>Success!</strong> Modified PO Doc has been generated and downloaded.';
+                statusDiv.style.display = 'block';
+                
+                statsDiv.innerHTML = `
+                    <h3>Processing Statistics</h3>
+                    <ul>
+                        <li><strong>Total rows processed:</strong> ${modifiedRows.length}</li>
+                        <li><strong>Rows matched with carton data:</strong> ${matchCount} (${(matchCount/modifiedRows.length*100).toFixed(1)}%)</li>
+                        <li><strong>Rows without carton data:</strong> ${noMatchCount}</li>
+                        <li><strong>File size:</strong> ${(csvContent.length / 1024).toFixed(2)} KB</li>
+                    </ul>
+                `;
+                statsDiv.style.display = 'block';
+                
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `<strong>Error:</strong> ${error.message}`;
+                statusDiv.style.display = 'block';
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Generate Modified PO Doc';
+            }
+        }
+    </script>
+</body>
+</html>
