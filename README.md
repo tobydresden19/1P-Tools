@@ -1,3 +1,3 @@
-# my-html-tools-dashboard
+# 1P-Tools dashboard
 
 A collection of useful HTML tools with a dashboard interface
