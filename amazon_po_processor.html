@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon PO Processing Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #232526 0%, #414345 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .upload-box {
+            border: 3px dashed #e0e7ff;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            background: #fafbff;
+        }
+        
+        .upload-box:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .upload-box.dragover {
+            border-color: #667eea;
+            background: #e0e7ff;
+            transform: scale(1.02);
+        }
+        
+        .upload-box h3 {
+            color: #374151;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+        
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .file-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .file-info.show {
+            display: block;
+        }
+        
+        .process-section {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .process-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            disabled: opacity 0.5;
+        }
+        
+        .process-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(16, 185, 129, 0.4);
+        }
+        
+        .process-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status-panel {
+            background: #f9fafb;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .status-panel.show {
+            display: block;
+        }
+        
+        .status-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .step-icon.pending {
+            background: #9ca3af;
+        }
+        
+        .step-icon.processing {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .step-icon.completed {
+            background: #10b981;
+        }
+        
+        .step-icon.error {
+            background: #ef4444;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+        
+        .step-description {
+            color: #6b7280;
+            font-size: 0.9em;
+        }
+        
+        .error-panel {
+            background: #fef2f2;
+            border: 2px solid #fecaca;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .error-panel.show {
+            display: block;
+        }
+        
+        .error-title {
+            color: #dc2626;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .error-list {
+            color: #7f1d1d;
+            font-size: 0.9em;
+        }
+        
+        .download-section {
+            text-align: center;
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .download-section.show {
+            display: block;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(139, 92, 246, 0.4);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Amazon PO Processing Tool</h1>
+            <p>Complete 5-step workflow: Filter → Transfer → Update → Validate → Export</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="upload-section">
+                <div class="upload-box" id="poUploadBox">
+                    <h3>📊 PO Upload File</h3>
+                    <button class="upload-btn" onclick="document.getElementById('poFile').click()">
+                        Choose File
+                    </button>
+                    <input type="file" id="poFile" class="file-input" accept=".xlsx,.xls" />
+                    <p style="color: #6b7280; font-size: 0.9em;">Excel file with PO decisions</p>
+                    <div class="file-info" id="poFileInfo"></div>
+                </div>
+                
+                <div class="upload-box" id="confirmUploadBox">
+                    <h3>📋 Confirm Download File</h3>
+                    <button class="upload-btn" onclick="document.getElementById('confirmFile').click()">
+                        Choose File
+                    </button>
+                    <input type="file" id="confirmFile" class="file-input" accept=".xlsx,.xls" />
+                    <p style="color: #6b7280; font-size: 0.9em;">Amazon confirm template</p>
+                    <div class="file-info" id="confirmFileInfo"></div>
+                </div>
+                
+                <div class="upload-box" id="templateUploadBox">
+                    <h3>📄 Blank Template File</h3>
+                    <button class="upload-btn" onclick="document.getElementById('templateFile').click()">
+                        Choose File
+                    </button>
+                    <input type="file" id="templateFile" class="file-input" accept=".xlsx,.xls" />
+                    <p style="color: #6b7280; font-size: 0.9em;">Blank Amazon template</p>
+                    <div class="file-info" id="templateFileInfo"></div>
+                </div>
+            </div>
+            
+            <div class="process-section">
+                <button class="process-btn" id="processBtn" onclick="processFiles()" disabled>
+                    🔄 Process Files
+                </button>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+            
+            <div class="status-panel" id="statusPanel">
+                <h3 style="margin-bottom: 20px; color: #374151;">Processing Status</h3>
+                
+                <div class="status-step">
+                    <div class="step-icon pending" id="step1Icon">1</div>
+                    <div class="step-content">
+                        <div class="step-title">Filter Confirm Download</div>
+                        <div class="step-description">Remove rows where PO Number doesn't exist in PO Upload</div>
+                    </div>
+                </div>
+                
+                <div class="status-step">
+                    <div class="step-icon pending" id="step2Icon">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Transfer Quantities</div>
+                        <div class="step-description">Copy Total Qty to Fulfill to Quantity Confirmed using PO+ASIN matching</div>
+                    </div>
+                </div>
+                
+                <div class="status-step">
+                    <div class="step-icon pending" id="step3Icon">3</div>
+                    <div class="step-content">
+                        <div class="step-title">Update Availability Status</div>
+                        <div class="step-description">Set status based on quantity (>0 = Accepted, =0 = Out of stock)</div>
+                    </div>
+                </div>
+                
+                <div class="status-step">
+                    <div class="step-icon pending" id="step4Icon">4</div>
+                    <div class="step-content">
+                        <div class="step-title">Validate Hand Off Dates</div>
+                        <div class="step-description">Ensure Expected Hand Off Date ≤ Hand Off End</div>
+                    </div>
+                </div>
+                
+                <div class="status-step">
+                    <div class="step-icon pending" id="step5Icon">5</div>
+                    <div class="step-content">
+                        <div class="step-title">Export to Template</div>
+                        <div class="step-description">Copy data to blank template preserving all formatting</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="error-panel" id="errorPanel">
+                <div class="error-title">⚠️ Processing Errors</div>
+                <div class="error-list" id="errorList"></div>
+            </div>
+            
+            <div class="download-section" id="downloadSection">
+                <h3 style="color: #374151; margin-bottom: 15px;">✅ Processing Complete!</h3>
+                <a class="download-btn" id="downloadBtn" download="Amazon_Confirm_Upload_Processed.xlsx">
+                    📥 Download Processed File
+                </a>
+                <p style="color: #6b7280; margin-top: 10px;">Ready for Amazon upload</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let poData = null;
+        let confirmData = null;
+        let templateData = null;
+        let errors = [];
+
+        // File upload handlers
+        document.getElementById('poFile').addEventListener('change', (e) => handleFileUpload(e, 'po'));
+        document.getElementById('confirmFile').addEventListener('change', (e) => handleFileUpload(e, 'confirm'));
+        document.getElementById('templateFile').addEventListener('change', (e) => handleFileUpload(e, 'template'));
+
+        function handleFileUpload(event, type) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const fileInfo = document.getElementById(`${type}FileInfo`);
+            fileInfo.innerHTML = `
+                <strong>${file.name}</strong><br>
+                <small>Size: ${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+            `;
+            fileInfo.classList.add('show');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellStyles: true, cellFormulas: true, cellDates: true });
+                
+                if (type === 'po') {
+                    poData = workbook;
+                } else if (type === 'confirm') {
+                    confirmData = workbook;
+                } else if (type === 'template') {
+                    templateData = workbook;
+                }
+
+                checkReadyState();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function checkReadyState() {
+            const processBtn = document.getElementById('processBtn');
+            if (poData && confirmData && templateData) {
+                processBtn.disabled = false;
+                processBtn.textContent = '🚀 Process Files';
+            }
+        }
+
+        function updateProgress(step, total) {
+            const progressFill = document.getElementById('progressFill');
+            const percentage = (step / total) * 100;
+            progressFill.style.width = `${percentage}%`;
+        }
+
+        function updateStepStatus(stepNum, status) {
+            const icon = document.getElementById(`step${stepNum}Icon`);
+            icon.className = `step-icon ${status}`;
+            
+            if (status === 'processing') {
+                icon.innerHTML = '⏳';
+            } else if (status === 'completed') {
+                icon.innerHTML = '✅';
+            } else if (status === 'error') {
+                icon.innerHTML = '❌';
+            }
+        }
+
+        function addError(message) {
+            errors.push(message);
+            const errorPanel = document.getElementById('errorPanel');
+            const errorList = document.getElementById('errorList');
+            
+            errorList.innerHTML = errors.map(error => `<div>• ${error}</div>`).join('');
+            errorPanel.classList.add('show');
+        }
+
+        async function processFiles() {
+            try {
+                errors = [];
+                document.getElementById('statusPanel').classList.add('show');
+                document.getElementById('errorPanel').classList.remove('show');
+                document.getElementById('downloadSection').classList.remove('show');
+                
+                // Reset all step icons
+                for (let i = 1; i <= 5; i++) {
+                    updateStepStatus(i, 'pending');
+                }
+
+                // Step 1: Filter Confirm Download
+                updateStepStatus(1, 'processing');
+                updateProgress(0, 5);
+                
+                const filteredConfirmData = await step1FilterConfirmDownload();
+                updateStepStatus(1, 'completed');
+                updateProgress(1, 5);
+                
+                // Step 2: Transfer Quantities
+                updateStepStatus(2, 'processing');
+                const quantityUpdatedData = await step2TransferQuantities(filteredConfirmData);
+                updateStepStatus(2, 'completed');
+                updateProgress(2, 5);
+                
+                // Step 3: Update Availability Status
+                updateStepStatus(3, 'processing');
+                const statusUpdatedData = await step3UpdateAvailabilityStatus(quantityUpdatedData);
+                updateStepStatus(3, 'completed');
+                updateProgress(3, 5);
+                
+                // Step 4: Validate Hand Off Dates
+                updateStepStatus(4, 'processing');
+                const dateValidatedData = await step4ValidateHandOffDates(statusUpdatedData);
+                updateStepStatus(4, 'completed');
+                updateProgress(4, 5);
+                
+                // Step 5: Export to Template
+                updateStepStatus(5, 'processing');
+                const finalFile = await step5ExportToTemplate(dateValidatedData);
+                updateStepStatus(5, 'completed');
+                updateProgress(5, 5);
+                
+                // Create download
+                const blob = new Blob([finalFile], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const url = URL.createObjectURL(blob);
+                
+                const downloadBtn = document.getElementById('downloadBtn');
+                downloadBtn.href = url;
+                
+                document.getElementById('downloadSection').classList.add('show');
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                addError(`Processing failed: ${error.message}`);
+                
+                // Mark current step as error
+                for (let i = 1; i <= 5; i++) {
+                    const icon = document.getElementById(`step${i}Icon`);
+                    if (icon.className.includes('processing')) {
+                        updateStepStatus(i, 'error');
+                        break;
+                    }
+                }
+            }
+        }
+
+        async function step1FilterConfirmDownload() {
+            // Get PO Numbers from PO Upload (Column A, starting row 2)
+            const poSheet = poData.Sheets[poData.SheetNames[0]]; // Assuming first sheet
+            const poNumbers = new Set();
+            
+            // Extract PO Numbers from PO Upload
+            const poRange = XLSX.utils.decode_range(poSheet['!ref']);
+            for (let row = 1; row <= poRange.e.r; row++) {
+                const cellRef = XLSX.utils.encode_cell({r: row, c: 0});
+                const cell = poSheet[cellRef];
+                if (cell && cell.v) {
+                    poNumbers.add(String(cell.v).trim());
+                }
+            }
+
+            // Filter Confirm Download
+            const confirmSheet = confirmData.Sheets["Line Items"];
+            const confirmRange = XLSX.utils.decode_range(confirmSheet['!ref']);
+            const filteredRows = [];
+            
+            // Keep header rows (0-2)
+            for (let row = 0; row <= 2; row++) {
+                filteredRows.push(row);
+            }
+            
+            // Check data rows (starting from row 3)
+            let removedCount = 0;
+            for (let row = 3; row <= confirmRange.e.r; row++) {
+                const cellRef = XLSX.utils.encode_cell({r: row, c: 0});
+                const cell = confirmSheet[cellRef];
+                
+                if (cell && cell.v) {
+                    const poNumber = String(cell.v).trim();
+                    if (poNumbers.has(poNumber)) {
+                        filteredRows.push(row);
+                    } else {
+                        removedCount++;
+                    }
+                }
+            }
+            
+            console.log(`Step 1: Removed ${removedCount} rows, kept ${filteredRows.length - 3} data rows`);
+            
+            // Create filtered sheet data
+            const filteredSheet = {};
+            
+            // Copy sheet properties
+            Object.keys(confirmSheet).forEach(key => {
+                if (key.startsWith('!')) {
+                    filteredSheet[key] = confirmSheet[key];
+                }
+            });
+            
+            // Copy filtered rows
+            filteredRows.forEach((originalRow, newRowIndex) => {
+                for (let col = 0; col <= confirmRange.e.c; col++) {
+                    const originalCellRef = XLSX.utils.encode_cell({r: originalRow, c: col});
+                    const newCellRef = XLSX.utils.encode_cell({r: newRowIndex, c: col});
+                    
+                    if (confirmSheet[originalCellRef]) {
+                        filteredSheet[newCellRef] = {...confirmSheet[originalCellRef]};
+                    }
+                }
+            });
+            
+            // Update range
+            filteredSheet['!ref'] = XLSX.utils.encode_range({
+                s: {c: 0, r: 0},
+                e: {c: confirmRange.e.c, r: filteredRows.length - 1}
+            });
+            
+            return filteredSheet;
+        }
+
+        async function step2TransferQuantities(confirmSheet) {
+            // Build lookup map from PO Upload (PO Number + ASIN -> Total Qty to Fulfill)
+            const poSheet = poData.Sheets[poData.SheetNames[0]];
+            const poRange = XLSX.utils.decode_range(poSheet['!ref']);
+            const quantityLookup = new Map();
+            const duplicateKeys = new Set();
+            
+            // Build lookup from PO Upload
+            for (let row = 1; row <= poRange.e.r; row++) {
+                const poCell = poSheet[XLSX.utils.encode_cell({r: row, c: 0})]; // Column A
+                const asinCell = poSheet[XLSX.utils.encode_cell({r: row, c: 3})]; // Column D  
+                const qtyCell = poSheet[XLSX.utils.encode_cell({r: row, c: 42})]; // Column AQ (Total Qty to Fulfill)
+                
+                if (poCell && poCell.v && asinCell && asinCell.v && qtyCell && qtyCell.v !== undefined) {
+                    const key = `${String(poCell.v).trim()}|${String(asinCell.v).trim()}`;
+                    
+                    if (quantityLookup.has(key)) {
+                        duplicateKeys.add(key);
+                        addError(`Duplicate PO+ASIN combination found: ${key}`);
+                    } else {
+                        // Validate quantity is numeric
+                        const qty = Number(qtyCell.v);
+                        if (isNaN(qty)) {
+                            addError(`Invalid quantity value at row ${row + 1}: ${qtyCell.v}`);
+                        } else {
+                            quantityLookup.set(key, qty);
+                        }
+                    }
+                }
+            }
+            
+            // Update Confirm Download quantities
+            const confirmRange = XLSX.utils.decode_range(confirmSheet['!ref']);
+            let updatedCount = 0;
+            let missingMatches = 0;
+            
+            for (let row = 3; row <= confirmRange.e.r; row++) {
+                const poCell = confirmSheet[XLSX.utils.encode_cell({r: row, c: 0})]; // Column A
+                const asinCell = confirmSheet[XLSX.utils.encode_cell({r: row, c: 3})]; // Column D
+                
+                if (poCell && poCell.v && asinCell && asinCell.v) {
+                    const key = `${String(poCell.v).trim()}|${String(asinCell.v).trim()}`;
+                    
+                    if (quantityLookup.has(key)) {
+                        const qty = quantityLookup.get(key);
+                        const qtyConfirmedRef = XLSX.utils.encode_cell({r: row, c: 11}); // Column L
+                        
+                        confirmSheet[qtyConfirmedRef] = {
+                            v: qty,
+                            t: 'n',
+                            z: '0'
+                        };
+                        
+                        updatedCount++;
+                    } else {
+                        missingMatches++;
+                        addError(`Missing PO+ASIN match in PO Upload: ${key} (row ${row + 1})`);
+                    }
+                }
+            }
+            
+            console.log(`Step 2: Updated ${updatedCount} quantities, ${missingMatches} missing matches`);
+            
+            if (duplicateKeys.size > 0) {
+                addError(`Found ${duplicateKeys.size} duplicate PO+ASIN combinations in PO Upload`);
+            }
+            
+            return confirmSheet;
+        }
+
+        async function step3UpdateAvailabilityStatus(confirmSheet) {
+            const confirmRange = XLSX.utils.decode_range(confirmSheet['!ref']);
+            let updatedCount = 0;
+            
+            for (let row = 3; row <= confirmRange.e.r; row++) {
+                const qtyConfirmedRef = XLSX.utils.encode_cell({r: row, c: 11}); // Column L
+                const availabilityRef = XLSX.utils.encode_cell({r: row, c: 18}); // Column S
+                
+                const qtyCell = confirmSheet[qtyConfirmedRef];
+                
+                if (qtyCell && qtyCell.v !== undefined) {
+                    const qty = Number(qtyCell.v);
+                    
+                    if (isNaN(qty)) {
+                        addError(`Invalid quantity for status update at row ${row + 1}: ${qtyCell.v}`);
+                        continue;
+                    }
+                    
+                    let status;
+                    if (qty > 0) {
+                        status = "AC - Accepted: In stock";
+                    } else if (qty === 0) {
+                        status = "OS - Cancelled: Out of stock";
+                    } else {
+                        addError(`Negative quantity found at row ${row + 1}: ${qty}`);
+                        continue;
+                    }
+                    
+                    confirmSheet[availabilityRef] = {
+                        v: status,
+                        t: 's',
+                        z: '@'
+                    };
+                    
+                    updatedCount++;
+                }
+            }
+            
+            console.log(`Step 3: Updated ${updatedCount} availability statuses`);
+            return confirmSheet;
+        }
+
+        async function step4ValidateHandOffDates(confirmSheet) {
+            const confirmRange = XLSX.utils.decode_range(confirmSheet['!ref']);
+            let adjustedCount = 0;
+            let errorCount = 0;
+            
+            for (let row = 3; row <= confirmRange.e.r; row++) {
+                const handOffEndRef = XLSX.utils.encode_cell({r: row, c: 15}); // Column P
+                const expectedDateRef = XLSX.utils.encode_cell({r: row, c: 17}); // Column R
+                
+                const handOffEndCell = confirmSheet[handOffEndRef];
+                const expectedDateCell = confirmSheet[expectedDateRef];
+                
+                // Check for missing dates
+                if (!handOffEndCell || !handOffEndCell.v) {
+                    addError(`Missing Hand Off End date at row ${row + 1}`);
+                    errorCount++;
+                    continue;
+                }
+                
+                if (!expectedDateCell || !expectedDateCell.v) {
+                    addError(`Missing Expected Hand Off Date at row ${row + 1}`);
+                    errorCount++;
+                    continue;
+                }
+                
+                // Parse dates
+                let handOffEndDate, expectedDate;
+                
+                try {
+                    if (handOffEndCell.t === 'd') {
+                        handOffEndDate = new Date(handOffEndCell.v);
+                    } else {
+                        handOffEndDate = new Date(handOffEndCell.v);
+                    }
+                    
+                    if (expectedDateCell.t === 'd') {
+                        expectedDate = new Date(expectedDateCell.v);
+                    } else {
+                        expectedDate = new Date(expectedDateCell.v);
+                    }
+                    
+                    if (isNaN(handOffEndDate.getTime()) || isNaN(expectedDate.getTime())) {
+                        throw new Error('Invalid date format');
+                    }
+                } catch (e) {
+                    addError(`Invalid date format at row ${row + 1}`);
+                    errorCount++;
+                    continue;
+                }
+                
+                // Check if Expected > Hand Off End
+                if (expectedDate > handOffEndDate) {
+                    confirmSheet[expectedDateRef] = {...handOffEndCell};
+                    adjustedCount++;
+                }
+            }
+            
+            console.log(`Step 4: Adjusted ${adjustedCount} dates, ${errorCount} errors found`);
+            return confirmSheet;
+        }
+
+        async function step5ExportToTemplate(processedConfirmSheet) {
+            // Get the template workbook
+            const templateWorkbook = {...templateData};
+            const templateSheet = templateWorkbook.Sheets["Line Items"];
+            
+            // Copy processed data to template (paste special values equivalent)
+            const processedRange = XLSX.utils.decode_range(processedConfirmSheet['!ref']);
+            
+            // Copy only data values, preserving template formatting
+            for (let row = 0; row <= processedRange.e.r; row++) {
+                for (let col = 0; col <= processedRange.e.c; col++) {
+                    const cellRef = XLSX.utils.encode_cell({r: row, c: col});
+                    const processedCell = processedConfirmSheet[cellRef];
+                    
+                    if (processedCell && processedCell.v !== undefined) {
+                        // Only copy the value, preserving template formatting
+                        if (templateSheet[cellRef]) {
+                            // Update existing cell with new value, keep formatting
+                            templateSheet[cellRef].v = processedCell.v;
+                            templateSheet[cellRef].w = processedCell.w || String(processedCell.v);
+                        } else {
+                            // Create new cell with basic formatting
+                            templateSheet[cellRef] = {
+                                v: processedCell.v,
+                                t: processedCell.t || 's',
+                                z: processedCell.z || '@'
+                            };
+                        }
+                    }
+                }
+            }
+            
+            // Update the range to match processed data
+            templateSheet['!ref'] = XLSX.utils.encode_range({
+                s: {c: 0, r: 0},
+                e: {c: processedRange.e.c, r: processedRange.e.r}
+            });
+            
+            console.log('Step 5: Data copied to template successfully');
+            
+            // Generate Excel file
+            const workbookOut = XLSX.write(templateWorkbook, {
+                type: 'array',
+                bookType: 'xlsx',
+                cellStyles: true
+            });
+            
+            return workbookOut;
+        }
+
+        // Drag and drop functionality
+        ['poUploadBox', 'confirmUploadBox', 'templateUploadBox'].forEach(boxId => {
+            const box = document.getElementById(boxId);
+            const fileType = boxId.replace('UploadBox', '');
+            
+            box.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                box.classList.add('dragover');
+            });
+            
+            box.addEventListener('dragleave', () => {
+                box.classList.remove('dragover');
+            });
+            
+            box.addEventListener('drop', (e) => {
+                e.preventDefault();
+                box.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const fileInput = document.getElementById(`${fileType}File`);
+                    fileInput.files = files;
+                    fileInput.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+    </script>
+</body>
+</html>
